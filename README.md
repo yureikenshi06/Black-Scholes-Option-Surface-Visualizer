@@ -1,4 +1,4 @@
-# Black-Scholes Option Pricing Tool
+# Black Scholes Option Surface Visualizer
 
 A professional, modular implementation of the Black-Scholes option pricing model with 3D visualization capabilities.
 
