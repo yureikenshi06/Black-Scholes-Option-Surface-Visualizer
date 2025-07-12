@@ -1,140 +1,85 @@
-"""
-3D surface plotting for option data.
-"""
 import numpy as np
-import plotly.graph_objects as go
-from scipy.interpolate import griddata
-from models import BlackScholes
+from scipy.stats import norm
+from scipy.optimize import newton
+from numpy import log, sqrt, exp
+
+try:
+    from models import BlackScholes
+except ImportError:
+    # Fallback if models.py is not available
+    from dataclasses import dataclass
+    import numpy as np
+    from scipy.stats import norm
+    from numpy import log, sqrt, exp
 
 
-def create_surface_plot(xi, yi, zi, title: str, y_label: str,
-                        customdata=None, hovertemplate=None):
-    """Create a 3D surface plot."""
-    fig = go.Figure(data=[go.Surface(
-        x=xi, y=yi, z=zi,
-        colorscale='Viridis',
-        customdata=customdata,
-        hovertemplate=hovertemplate
-    )])
+    @dataclass
+    class BlackScholes:
+        """Black-Scholes option pricing model."""
+        T: float  # Time to expiration
+        K: float  # Strike price
+        S: float  # Spot price
+        sigma: float  # Volatility
+        r: float  # Risk-free rate
+        q: float = 0.0  # Dividend yield
 
-    fig.update_layout(
-        title=title,
-        scene=dict(
-            xaxis_title='Time to Expiration (years)',
-            yaxis_title=y_label,
-            zaxis_title=title.split()[0]
-        ),
-        width=800,
-        height=700
-    )
+        def _d1_d2(self):
+            """Calculate d1 and d2 parameters."""
+            d1 = (log(self.S / self.K) + (self.r - self.q + 0.5 * self.sigma ** 2) * self.T) / (
+                        self.sigma * sqrt(self.T))
+            d2 = d1 - self.sigma * sqrt(self.T)
+            return d1, d2
 
-    return fig
-
-
-def generate_surface_data(option_data, spot_price: float, volatility: float,
-                          risk_free_rate: float, plot_by: str = 'strike'):
-    """Generate interpolated surface data for plotting."""
-    if plot_by == 'moneyness':
-        option_data['Moneyness'] = option_data['strike'] / spot_price
-        X = option_data['TimeToExpiry'].values
-        Y = option_data['Moneyness'].values
-        y_label = 'Moneyness'
-        y_format = '.3f'
-    else:
-        X = option_data['TimeToExpiry'].values
-        Y = option_data['strike'].values
-        y_label = 'Strike Price ($)'
-        y_format = '.2f'
-
-    Z_iv = option_data['ImpliedVolatility'].values * 100
-
-    # Create meshgrid for interpolation
-    xi = np.linspace(min(X), max(X), 30)
-    yi = np.linspace(min(Y), max(Y), 30)
-    xi, yi = np.meshgrid(xi, yi)
-
-    # Interpolate implied volatility
-    zi_iv = griddata((X, Y), Z_iv, (xi, yi), method='linear')
-
-    # Calculate theoretical prices
-    zi_call = np.zeros_like(zi_iv)
-    zi_put = np.zeros_like(zi_iv)
-
-    for i in range(xi.shape[0]):
-        for j in range(xi.shape[1]):
-            T = xi[i, j]
-            strike_val = yi[i, j] * spot_price if plot_by == 'moneyness' else yi[i, j]
-
-            if T > 0 and strike_val > 0:
-                bs = BlackScholes(T, strike_val, spot_price, volatility, risk_free_rate)
-                call_price, put_price = bs.prices()
-                zi_call[i, j] = call_price
-                zi_put[i, j] = put_price
-            else:
-                zi_call[i, j] = np.nan
-                zi_put[i, j] = np.nan
-
-    return xi, yi, zi_iv, zi_call, zi_put, y_label, y_format
+        def prices(self):
+            """Calculate call and put option prices."""
+            d1, d2 = self._d1_d2()
+            call = exp(-self.q * self.T) * self.S * norm.cdf(d1) - exp(-self.r * self.T) * self.K * norm.cdf(d2)
+            put = exp(-self.r * self.T) * self.K * norm.cdf(-d2) - exp(-self.q * self.T) * self.S * norm.cdf(-d1)
+            return call, put
 
 
-def plot_option_surfaces(option_data, spot_price: float, volatility: float,
-                         risk_free_rate: float, ticker: str, plot_by: str = 'strike'):
-    """Plot implied volatility and price surfaces."""
-    xi, yi, zi_iv, zi_call, zi_put, y_label, y_format = generate_surface_data(
-        option_data, spot_price, volatility, risk_free_rate, plot_by
-    )
+class OptionCalculator:
+    """Handles option pricing and implied volatility calculations."""
 
-    def make_customdata(z, x, y):
-        return np.stack((z, x, y), axis=-1)
+    @staticmethod
+    def bs_call_price(S, K, r, T, sigma, q=0.0):
+        """Calculate Black-Scholes call price."""
+        if T <= 0 or sigma <= 0:
+            return max(0, S - K)
 
-    # Create hover templates
-    hovertemplate_iv = (
-        f"Volatility: %{{customdata[0]:.2f}}%<br>"
-        f"Time to Expiration: %{{customdata[1]:.3f}} years<br>"
-        f"{y_label}: %{{customdata[2]:{y_format}}}<extra></extra>"
-    )
-    hovertemplate_call = (
-        f"Call Price: %{{customdata[0]:.2f}}<br>"
-        f"Time to Expiration: %{{customdata[1]:.3f}} years<br>"
-        f"{y_label}: %{{customdata[2]:{y_format}}}<extra></extra>"
-    )
-    hovertemplate_put = (
-        f"Put Price: %{{customdata[0]:.2f}}<br>"
-        f"Time to Expiration: %{{customdata[1]:.3f}} years<br>"
-        f"{y_label}: %{{customdata[2]:{y_format}}}<extra></extra>"
-    )
+        d1 = (log(S / K) + (r - q + 0.5 * sigma ** 2) * T) / (sigma * sqrt(T))
+        d2 = d1 - sigma * sqrt(T)
+        return exp(-q * T) * S * norm.cdf(d1) - exp(-r * T) * K * norm.cdf(d2)
 
-    # Create plots
-    plots = []
+    @staticmethod
+    def implied_volatility(S, K, r, T, call_price, q=0.0):
+        """Calculate implied volatility using Newton-Raphson method."""
+        if call_price < max(0, S - K * exp(-r * T)):
+            return np.nan
 
-    # Implied Volatility Surface
-    iv_fig = create_surface_plot(
-        xi, yi, zi_iv,
-        f"Implied Volatility Surface of {ticker}",
-        y_label,
-        make_customdata(zi_iv, xi, yi),
-        hovertemplate_iv
-    )
-    plots.append(iv_fig)
+        try:
+            func = lambda sigma: OptionCalculator.bs_call_price(S, K, r, T, sigma, q) - call_price
+            return newton(func, 0.2, tol=1e-5, maxiter=100)
+        except:
+            return np.nan
 
-    # Call Price Surface
-    call_fig = create_surface_plot(
-        xi, yi, zi_call,
-        f"Call Price Surface of {ticker}",
-        y_label,
-        make_customdata(zi_call, xi, yi),
-        hovertemplate_call
-    )
-    plots.append(call_fig)
+    @staticmethod
+    def calculate_option_surfaces(xi, yi, S, r, q, is_moneyness=False):
+        """Calculate call and put price surfaces."""
+        zi_call, zi_put = np.zeros_like(xi), np.zeros_like(xi)
 
-    # Put Price Surface
-    put_fig = create_surface_plot(
-        xi, yi, zi_put,
-        f"Put Price Surface of {ticker}",
-        y_label,
-        make_customdata(zi_put, xi, yi),
-        hovertemplate_put
-    )
-    plots.append(put_fig)
+        for i in range(xi.shape[0]):
+            for j in range(xi.shape[1]):
+                T = xi[i, j]
+                K = yi[i, j] * S if is_moneyness else yi[i, j]
 
-    return plots
+                if T > 0 and K > 0:
+                    bs = BlackScholes(T, K, S, sigma=0.2, r=r, q=q)
+                    call, put = bs.prices()
+                    zi_call[i, j] = call
+                    zi_put[i, j] = put
+                else:
+                    zi_call[i, j] = np.nan
+                    zi_put[i, j] = np.nan
+
+        return zi_call, zi_put
