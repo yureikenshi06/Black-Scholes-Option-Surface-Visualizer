@@ -1,10 +1,6 @@
-<<<<<<< HEAD
 # Black-Scholes Options Surface Visualizer
-=======
-# Black Scholes Option Surface Visualizer
->>>>>>> 6fb2bd2db92932dfef0425ff7fe4b0bf499fc0ce
 
-A professional Python application for visualizing implied volatility and option price surfaces using the Black-Scholes model.
+A Python application for visualizing implied volatility and option price surfaces using the Black-Scholes model.
 
 ## Features
 
