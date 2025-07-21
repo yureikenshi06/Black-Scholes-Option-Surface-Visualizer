@@ -61,7 +61,6 @@ def process_option_data(calls_data, S, r, q, use_moneyness):
 
 
 def main():
-    """Main application entry point."""
     try:
         # Get user inputs
         ticker, r, q, use_moneyness = get_user_inputs()

@@ -3,8 +3,6 @@ import plotly.graph_objects as go
 from scipy.interpolate import griddata
 
 class SurfacePlotter:
-    """Handles 3D surface plotting for option data."""
-    
     @staticmethod
     def create_surface(xi, yi, zi, title, y_label, z_label, y_format='.2f'):
         """Create a 3D surface plot."""

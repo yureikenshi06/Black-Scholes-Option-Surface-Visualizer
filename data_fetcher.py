@@ -4,11 +4,8 @@ import yfinance as yf
 from datetime import datetime
 
 class DataFetcher:
-    """Handles fetching market data from Yahoo Finance."""
-    
     @staticmethod
     def fetch_spot(ticker: str) -> float:
-        """Fetch current spot price for ticker."""
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=FutureWarning)
@@ -21,7 +18,6 @@ class DataFetcher:
     
     @staticmethod
     def fetch_option_chain(ticker: str, spot_price: float, min_ratio: float = 0.7, max_ratio: float = 1.3):
-        """Fetch filtered option chain data."""
         stock = yf.Ticker(ticker)
         expiration_dates = stock.options
         

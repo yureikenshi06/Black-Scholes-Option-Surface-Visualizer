@@ -1,7 +1,5 @@
-import numpy as np
-from scipy.stats import norm
 from scipy.optimize import newton
-from numpy import log, sqrt, exp
+
 
 try:
     from models import BlackScholes
@@ -39,7 +37,6 @@ except ImportError:
 
 
 class OptionCalculator:
-    """Handles option pricing and implied volatility calculations."""
 
     @staticmethod
     def bs_call_price(S, K, r, T, sigma, q=0.0):
@@ -65,7 +62,6 @@ class OptionCalculator:
 
     @staticmethod
     def calculate_option_surfaces(xi, yi, S, r, q, is_moneyness=False):
-        """Calculate call and put price surfaces."""
         zi_call, zi_put = np.zeros_like(xi), np.zeros_like(xi)
 
         for i in range(xi.shape[0]):
